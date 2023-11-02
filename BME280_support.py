@@ -79,7 +79,7 @@ def connect(*args):
         pass
 
 def sockconnect(s_ipv4, s_port):
-    global s, connected, sensorpoll, sensorbcn, s_ipv4, s_port
+    global s, connected, sensorpoll, sensorbcn
     if connected == "no":
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
