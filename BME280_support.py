@@ -27,6 +27,8 @@ from datetime import datetime
 
 connected = "no"
 s = socket.socket()
+s_ipv4 = ''
+s_port = 8001
 my_bcn="c000A0B29692A6A6e0b288608486b07aae92888a62406303f021303631302e3639532f31303635302e38384557594430424358277320415052532074656c656d657472792076696120505954484f4ec0"
 telem_header="c000A0B29692A6A6e0b288608486b07aae92888a62406303f0"
 telem_tail="c0"
@@ -77,7 +79,7 @@ def connect(*args):
         pass
 
 def sockconnect(s_ipv4, s_port):
-    global s, connected, sensorpoll, sensorbcn
+    global s, connected, sensorpoll, sensorbcn, s_ipv4, s_port
     if connected == "no":
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         try:
@@ -102,7 +104,7 @@ def sockconnect(s_ipv4, s_port):
     return (s, connected)
 
 def sendbcn():
-    global s, connected
+    global s, connected, s_ipv4, s_port
     old_t=time.time()
     while not stop_event.is_set():
         bcnInterval = 600
@@ -121,10 +123,18 @@ def sendbcn():
             _w1.scrlLogs.insert(END, dtime() + "Beacon Interval: " + str(bcnInterval))
             try:
                 s.sendall(s_strbcn)
-            except:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.sendall(s_strbcn)
-                connected = "yes"
+            except socket.error as e:
+                if e:
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
+                    except socket.error:
+                        pass  # Ignore any errors during shutdown
+                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                    s.connect((s_ipv4, s_port))
+                    s.sendall(s_strbcn)
+                    connected = "yes"
+                else:
+                    pass
             old_t=time.time()
 
             # PARM
@@ -134,10 +144,18 @@ def sendbcn():
             s_strparm=bytes.fromhex(telem_header + hex_parm + telem_tail)
             try:
                 s.sendall(s_strparm)
-            except:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.sendall(s_strparm)
-                connected = "yes"
+            except socket.error as e:
+                if e:
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
+                    except socket.error:
+                        pass  # Ignore any errors during shutdown
+                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                    s.connect((s_ipv4, s_port))
+                    s.sendall(s_strparm)
+                    connected = "yes"
+                else:
+                    pass
             _w1.scrlLogs.insert(END, dtime() + "PARM=" + str(s_parm))
 
             # UNIT
@@ -147,10 +165,18 @@ def sendbcn():
             s_strunit=bytes.fromhex(telem_header + hex_unit + telem_tail)
             try:
                 s.sendall(s_strunit)
-            except:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.sendall(s_strunit)
-                connected = "yes"
+            except socket.error as e:
+                if e:
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
+                    except socket.error:
+                        pass  # Ignore any errors during shutdown
+                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                    s.connect((s_ipv4, s_port))
+                    s.sendall(s_strunit)
+                    connected = "yes"
+                else:
+                    pass
             _w1.scrlLogs.insert(END, dtime() + "UNIT=" + str(s_unit))
 
             # EQNS
@@ -160,10 +186,18 @@ def sendbcn():
             s_streqns=bytes.fromhex(telem_header + hex_eqns + telem_tail)
             try:
                 s.sendall(s_streqns)
-            except:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.sendall(s_streqns)
-                connected = "yes"
+            except socket.error as e:
+                if e:
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
+                    except socket.error:
+                        pass  # Ignore any errors during shutdown
+                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                    s.connect((s_ipv4, s_port))
+                    s.sendall(s_streqns)
+                    connected = "yes"
+                else:
+                    pass
             _w1.scrlLogs.insert(END, dtime() + "EQNS=" + str(s_eqns))
 
             # DATA
@@ -173,10 +207,18 @@ def sendbcn():
             s_strdata=bytes.fromhex(telem_header + hex_data + telem_tail)
             try:
                 s.sendall(s_strdata)
-            except:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.sendall(s_strdata)
-                connected = "yes"
+            except socket.error as e:
+                if e:
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
+                    except socket.error:
+                        pass  # Ignore any errors during shutdown
+                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                    s.connect((s_ipv4, s_port))
+                    s.sendall(s_strdata)
+                    connected = "yes"
+                else:
+                    pass
             _w1.scrlLogs.insert(END, dtime() + "DATA=" + str(s_data))
 
             # BITS
@@ -186,10 +228,18 @@ def sendbcn():
             s_strbits=bytes.fromhex(telem_header + hex_bits + telem_tail)
             try:
                 s.sendall(s_strbits)
-            except:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.sendall(s_strbits)
-                connected = "yes"
+            except socket.error as e:
+                if e:
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
+                    except socket.error:
+                        pass  # Ignore any errors during shutdown
+                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                    s.connect((s_ipv4, s_port))
+                    s.sendall(s_strbits)
+                    connected = "yes"
+                else:
+                    pass
             _w1.scrlLogs.insert(END, dtime() + "BITS=" + str(s_bits))
 
         time.sleep(1)  # Sleep for 1 second to reduce CPU usage
