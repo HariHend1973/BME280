@@ -24,6 +24,7 @@ import time
 import threading
 import shlex
 from datetime import datetime
+import subprocess
 
 connected = "no"
 s = socket.socket()
@@ -104,7 +105,7 @@ def sockconnect(s_ipv4, s_port):
     return (s, connected)
 
 def sendbcn():
-    global s, connected, s_ipv4, s_port
+    global s, connected, s_ipv4, s_port, my_bcn, temperature, humidity, pressure
     old_t=time.time()
     while not stop_event.is_set():
         bcnInterval = 600
@@ -112,29 +113,29 @@ def sendbcn():
         if time.time()-old_t > bcnInterval:
             s_seq = telem_seq()
             s_rand_bits = rand_bits(8)
+            #my_position ="21303631302e3639532f31303635302e38384557"
+            my_position ='''=0610.69S/10650.88E_'''
             parm='''Temperature Humidity Pressure Altitude """" SW1 SW2 SW3 SW4 SW5 SW6 SW7 SW8'''
             unit='''deg.C % Pa MSL'''
             eqns='''YD0BCX-13 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0'''
             bits=f'''YD0BCX-13 {s_rand_bits} "YD0BCX telemetry station"'''
             data =f"T#{s_seq} {temperature} {humidity} {pressure} {altitude} 0000 11111111"
 
-            s_strbcn=bytes.fromhex(my_bcn)
-            _w1.scrlLogs.insert(END, dtime() + "beacon position: " +  binascii.unhexlify("21303631302e3639532f31303635302e38384557594430424358277320415052532074656c656d657472792076696120505954484f4e").decode('utf8'))
+            wxoutput = generate_aprs_weather_string(temperature, humidity, pressure)
+
+            s_strpos = ascii_to_hex(my_position + wxoutput + " APRS wx/telemetry station via python")
+            s_strbcn=bytes.fromhex(telem_header + s_strpos + telem_tail)
+            _w1.scrlLogs.insert(END, dtime() + "beacon position: " +  binascii.unhexlify(s_strpos + "594430424358277320415052532074656c656d657472792076696120505954484f4e").decode('utf8'))
             _w1.scrlLogs.insert(END, dtime() + "Beacon Interval: " + str(bcnInterval))
             try:
                 s.sendall(s_strbcn)
-            except socket.error as e:
-                if e:
-                    try:
-                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
-                    except socket.error:
-                        pass  # Ignore any errors during shutdown
-                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                    s.connect((s_ipv4, s_port))
-                    s.sendall(s_strbcn)
-                    connected = "yes"
-                else:
-                    pass
+            except socket.error:
+                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                s.connect((s_ipv4, s_port))
+                s.sendall(s_strbcn)
+                connected = "yes"
+            finally:
+                s.close()
             old_t=time.time()
 
             # PARM
@@ -144,18 +145,13 @@ def sendbcn():
             s_strparm=bytes.fromhex(telem_header + hex_parm + telem_tail)
             try:
                 s.sendall(s_strparm)
-            except socket.error as e:
-                if e:
-                    try:
-                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
-                    except socket.error:
-                        pass  # Ignore any errors during shutdown
-                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                    s.connect((s_ipv4, s_port))
-                    s.sendall(s_strparm)
-                    connected = "yes"
-                else:
-                    pass
+            except socket.error:
+                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                s.connect((s_ipv4, s_port))
+                s.sendall(s_strparm)
+                connected = "yes"
+            finally:
+                s.close()
             _w1.scrlLogs.insert(END, dtime() + "PARM=" + str(s_parm))
 
             # UNIT
@@ -165,18 +161,13 @@ def sendbcn():
             s_strunit=bytes.fromhex(telem_header + hex_unit + telem_tail)
             try:
                 s.sendall(s_strunit)
-            except socket.error as e:
-                if e:
-                    try:
-                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
-                    except socket.error:
-                        pass  # Ignore any errors during shutdown
-                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                    s.connect((s_ipv4, s_port))
-                    s.sendall(s_strunit)
-                    connected = "yes"
-                else:
-                    pass
+            except socket.error:
+                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                s.connect((s_ipv4, s_port))
+                s.sendall(s_strunit)
+                connected = "yes"
+            finally:
+                s.close()
             _w1.scrlLogs.insert(END, dtime() + "UNIT=" + str(s_unit))
 
             # EQNS
@@ -186,18 +177,13 @@ def sendbcn():
             s_streqns=bytes.fromhex(telem_header + hex_eqns + telem_tail)
             try:
                 s.sendall(s_streqns)
-            except socket.error as e:
-                if e:
-                    try:
-                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
-                    except socket.error:
-                        pass  # Ignore any errors during shutdown
-                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                    s.connect((s_ipv4, s_port))
-                    s.sendall(s_streqns)
-                    connected = "yes"
-                else:
-                    pass
+            except socket.errore:
+                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                s.connect((s_ipv4, s_port))
+                s.sendall(s_streqns)
+                connected = "yes"
+            finally:
+                s.close()
             _w1.scrlLogs.insert(END, dtime() + "EQNS=" + str(s_eqns))
 
             # DATA
@@ -207,18 +193,13 @@ def sendbcn():
             s_strdata=bytes.fromhex(telem_header + hex_data + telem_tail)
             try:
                 s.sendall(s_strdata)
-            except socket.error as e:
-                if e:
-                    try:
-                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
-                    except socket.error:
-                        pass  # Ignore any errors during shutdown
-                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                    s.connect((s_ipv4, s_port))
-                    s.sendall(s_strdata)
-                    connected = "yes"
-                else:
-                    pass
+            except socket.error:
+                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                s.connect((s_ipv4, s_port))
+                s.sendall(s_strdata)
+                connected = "yes"
+            finally:
+                s.close()
             _w1.scrlLogs.insert(END, dtime() + "DATA=" + str(s_data))
 
             # BITS
@@ -228,18 +209,13 @@ def sendbcn():
             s_strbits=bytes.fromhex(telem_header + hex_bits + telem_tail)
             try:
                 s.sendall(s_strbits)
-            except socket.error as e:
-                if e:
-                    try:
-                        s.shutdown(socket.SHUT_RDWR)  # Shutdown the socket
-                    except socket.error:
-                        pass  # Ignore any errors during shutdown
-                    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                    s.connect((s_ipv4, s_port))
-                    s.sendall(s_strbits)
-                    connected = "yes"
-                else:
-                    pass
+            except socket.error:
+                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+                s.connect((s_ipv4, s_port))
+                s.sendall(s_strbits)
+                connected = "yes"
+            finally:
+                s.close()
             _w1.scrlLogs.insert(END, dtime() + "BITS=" + str(s_bits))
 
         time.sleep(1)  # Sleep for 1 second to reduce CPU usage
@@ -256,26 +232,26 @@ def get_sensor():
             last_line = f.readlines()[-1]
             fields = last_line.split()
             lines = ' '.join(fields[2:10])
-            temperature = fields[3][:5]
-            humidity = fields[5][:5]
-            pressure = fields[7][:7]
-            altitude = fields[9][:4]
+            temperature = float(fields[3][:5])
+            humidity = float(fields[5][:5])
+            pressure = float(fields[7][:7])
+            altitude = float(fields[9][:4])
 
             # temperature
             _w1.txtTemperature.delete(0, END)  # Clear the existing text
-            _w1.txtTemperature.insert(0, temperature + " " + u"\u2103")  # Insert the new temperature
+            _w1.txtTemperature.insert(0, str(temperature) + " " + u"\u2103")  # Insert the new temperature
 
             # humidity
             _w1.txtHumidity.delete(0, END)
-            _w1.txtHumidity.insert(0, humidity + " %")
+            _w1.txtHumidity.insert(0, str(humidity) + " %")
 
             # pressure
             _w1.txtPressure.delete(0, END)
-            _w1.txtPressure.insert(0, pressure + " Pa")
+            _w1.txtPressure.insert(0, str(pressure) + " Pa")
 
             # altitude
             _w1.txtAltitude.delete(0, END)
-            _w1.txtAltitude.insert(0, altitude + " MSL")
+            _w1.txtAltitude.insert(0, str(altitude) + " MSL")
 
             # logs
             _w1.scrlLogs.insert(END, dtime() + lines.strip())
@@ -419,9 +395,35 @@ def ascii_to_hex(input_string):
     hexadecimal_representation = ascii_to_hex(input_string)
     return result
 
+def generate_aprs_weather_string(temperature, humidity, pressure):
+    # Get the current date and time in the APRS format (ddhhmmz).
+    #now = datetime.datetime.utcnow()
+    #date_time = now.strftime("%d%H%Mz")
+
+    #winds
+    wind_str=f"000/000g000"
+
+    # Format temperature with one decimal place (e.g., 25.5°C).
+    temperature_f = celsius_to_fahrenheit(float(temperature))
+    temperature_str = f"{temperature_f}"
+
+    # Format humidity as a percentage.
+    humidity_str = f"h{round(humidity)}"
+
+    # Format pressure with one decimal place (e.g., 1013.2 hPa).
+    rounded_pressure = round(pressure, 1)
+    pressure_str = f"b{str(rounded_pressure).replace('.', '')}"
+
+    # Combine the components to create the APRS weather string.
+    aprs_weather_string = f"{wind_str}t{temperature_str}{humidity_str}{pressure_str}"
+
+    return aprs_weather_string
+
+def celsius_to_fahrenheit(celsius):
+    fahrenheit = round((celsius * 9/5) + 32, 2)
+    return "{:0>{}}".format(round(fahrenheit), 3)
+
 if __name__ == '__main__':
     BME280.start_up()
-
-
 
 
