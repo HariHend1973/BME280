@@ -134,8 +134,6 @@ def sendbcn():
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_strbcn)
                 connected = "yes"
-            finally:
-                s.close()
             old_t=time.time()
 
             # PARM
@@ -150,8 +148,6 @@ def sendbcn():
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_strparm)
                 connected = "yes"
-            finally:
-                s.close()
             _w1.scrlLogs.insert(END, dtime() + "PARM=" + str(s_parm))
 
             # UNIT
@@ -166,8 +162,6 @@ def sendbcn():
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_strunit)
                 connected = "yes"
-            finally:
-                s.close()
             _w1.scrlLogs.insert(END, dtime() + "UNIT=" + str(s_unit))
 
             # EQNS
@@ -182,8 +176,6 @@ def sendbcn():
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_streqns)
                 connected = "yes"
-            finally:
-                s.close()
             _w1.scrlLogs.insert(END, dtime() + "EQNS=" + str(s_eqns))
 
             # DATA
@@ -198,8 +190,6 @@ def sendbcn():
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_strdata)
                 connected = "yes"
-            finally:
-                s.close()
             _w1.scrlLogs.insert(END, dtime() + "DATA=" + str(s_data))
 
             # BITS
@@ -214,8 +204,6 @@ def sendbcn():
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_strbits)
                 connected = "yes"
-            finally:
-                s.close()
             _w1.scrlLogs.insert(END, dtime() + "BITS=" + str(s_bits))
 
         time.sleep(1)  # Sleep for 1 second to reduce CPU usage
