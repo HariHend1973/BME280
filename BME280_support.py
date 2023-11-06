@@ -177,7 +177,7 @@ def sendbcn():
             s_streqns=bytes.fromhex(telem_header + hex_eqns + telem_tail)
             try:
                 s.sendall(s_streqns)
-            except socket.errore:
+            except socket.error:
                 s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
                 s.connect((s_ipv4, s_port))
                 s.sendall(s_streqns)
