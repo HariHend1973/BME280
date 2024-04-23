@@ -30,15 +30,19 @@ connected = "no"
 s = socket.socket()
 s_ipv4 = ''
 s_port = 8001
-my_bcn="c000A0B29692A6A6e0b288608486b07aae92888a62406303f021303631302e3639532f31303635302e38384557594430424358277320415052532074656c656d657472792076696120505954484f4ec0"
-telem_header="c000A0B29692A6A6e0b288608486b07aae92888a62406303f0"
-telem_tail="c0"
 stop_event = threading.Event()
 
 temperature = ''
 humidity = ''
 pressure = ''
 altitude = ''
+
+KISS_FEND = 0xC0  # Frame start/end marker
+KISS_FESC = 0xDB  # Escape character
+KISS_TFEND = 0xDC  # If after an escape, means there was an 0xC0 in the source message
+KISS_TFESC = 0xDD  # If after an escape, means there was an 0xDB in the source message
+
+paths = [ "WIDE1-1" ]
 
 _debug = True # False to eliminate debug printing from callback functions.
 
@@ -54,6 +58,7 @@ def main(*args):
     root.mainloop()
 
 def connect(*args):
+    global s_ipv4, s_port
     #if _debug:
     #    print('BME280_support.xxx')
     #    for arg in args:
@@ -107,6 +112,7 @@ def sockconnect(s_ipv4, s_port):
 def sendbcn():
     global s, connected, s_ipv4, s_port, my_bcn, temperature, humidity, pressure
     old_t=time.time()
+    aprs_cmd = '/home/hari/BME280/tx.py'
     while not stop_event.is_set():
         bcnInterval = 600
 
@@ -114,97 +120,129 @@ def sendbcn():
             s_seq = telem_seq()
             s_rand_bits = rand_bits(8)
             #my_position ="21303631302e3639532f31303635302e38384557"
-            my_position ='''=0610.69S/10650.88E_'''
-            parm='''Temperature Humidity Pressure Altitude """" SW1 SW2 SW3 SW4 SW5 SW6 SW7 SW8'''
-            unit='''deg.C % Pa MSL'''
-            eqns='''YD0BCX-13 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0'''
-            bits=f'''YD0BCX-13 {s_rand_bits} "YD0BCX telemetry station"'''
-            data =f"T#{s_seq} {temperature} {humidity} {pressure} {altitude} 0000 11111111"
+            my_position = '''0610.69S/10650.88E_'''
+            my_comment = ''' APRS wx/telemetry station using python'''
+            bcn_pos = '!{} {}'.format(my_position, my_comment)
+            parm=''':YD0BCX-13:PARM.Temperature,Humidity,Pressure,Altitude,,SW1,SW2,SW3,SW4,SW5,SW6,SW7,SW8'''
+            unit=''':YD0BCX-13:UNIT.deg.C,%,Pa,MSL'''
+            eqns=''':YD0BCX-13:EQNS.0,1,0,0,1,0,0,1,0,0,1,0,0,1,0'''
+            bits=f''':YD0BCX-13:BITS.{s_rand_bits},YD0BCX telemetry station'''
+            data =f"T#{s_seq},{temperature},{humidity},{pressure},{altitude},0000,11111111"
 
             wxoutput = generate_aprs_weather_string(temperature, humidity, pressure)
 
-            s_strpos = ascii_to_hex(my_position + wxoutput + " APRS wx/telemetry station via python")
-            s_strbcn=bytes.fromhex(telem_header + s_strpos + telem_tail)
-            _w1.scrlLogs.insert(END, dtime() + "beacon position: " +  binascii.unhexlify(s_strpos + "594430424358277320415052532074656c656d657472792076696120505954484f4e").decode('utf8'))
+            s_strpos = "/" + generate_aprs_timestamp() + my_position + wxoutput + my_comment
+            #s_strbcn=bytes.fromhex(telem_header + s_strpos + telem_tail)
+            _w1.scrlLogs.insert(END, dtime() + "beacon position: " +  "/" + generate_aprs_timestamp() + my_position + wxoutput + my_comment)
             _w1.scrlLogs.insert(END, dtime() + "Beacon Interval: " + str(bcnInterval))
-            try:
-                s.sendall(s_strbcn)
-            except socket.error:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.connect((s_ipv4, s_port))
-                s.sendall(s_strbcn)
-                connected = "yes"
+
+            # Get the KISS frame
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", s_strpos, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
+    
+            #cmd_bcn = ['python', aprs_cmd, 'YD0BCX-13', 'APZBME', s_strpos, 'WIDE1-1']
+            #subprocess.run(cmd_bcn)
+
             old_t=time.time()
 
             # PARM
             time.sleep(3)
-            s_parm = telem_param(parm)
-            hex_parm = ascii_to_hex(s_parm)
-            s_strparm=bytes.fromhex(telem_header + hex_parm + telem_tail)
-            try:
-                s.sendall(s_strparm)
-            except socket.error:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.connect((s_ipv4, s_port))
-                s.sendall(s_strparm)
-                connected = "yes"
-            _w1.scrlLogs.insert(END, dtime() + "PARM=" + str(s_parm))
+
+            # Get the KISS frame
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", parm, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
+
+            #cmd_parm = ['python', aprs_cmd, 'YD0BCX-13', 'APZBME', parm, 'WIDE1-1']
+            #subprocess.run(cmd_parm)
+
+            _w1.scrlLogs.insert(END, dtime() + "PARM=" + parm)
 
             # UNIT
             time.sleep(3)
-            s_unit = telem_unit(unit)
-            hex_unit = ascii_to_hex(s_unit)
-            s_strunit=bytes.fromhex(telem_header + hex_unit + telem_tail)
-            try:
-                s.sendall(s_strunit)
-            except socket.error:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.connect((s_ipv4, s_port))
-                s.sendall(s_strunit)
-                connected = "yes"
-            _w1.scrlLogs.insert(END, dtime() + "UNIT=" + str(s_unit))
+
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", unit, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
+
+            #cmd_unit = ['python', aprs_cmd, 'YD0BCX-13', 'APZBME', unit, 'WIDE1-1']
+            #subprocess.run(cmd_unit)
+
+
+            _w1.scrlLogs.insert(END, dtime() + "UNIT=" + unit)
 
             # EQNS
             time.sleep(3)
-            s_eqns = telem_eqns(eqns)
-            hex_eqns = ascii_to_hex(s_eqns)
-            s_streqns=bytes.fromhex(telem_header + hex_eqns + telem_tail)
-            try:
-                s.sendall(s_streqns)
-            except socket.error:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.connect((s_ipv4, s_port))
-                s.sendall(s_streqns)
-                connected = "yes"
-            _w1.scrlLogs.insert(END, dtime() + "EQNS=" + str(s_eqns))
+
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", eqns, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
+
+            #cmd_eqns = ['python', aprs_cmd, 'YD0BCX-13', 'APZBME', eqns, 'WIDE1-1']
+            #subprocess.run(cmd_eqns)
+
+            _w1.scrlLogs.insert(END, dtime() + "EQNS=" + eqns)
 
             # DATA
             time.sleep(3)
-            s_data = telem_data(data)
-            hex_data = ascii_to_hex(s_data)
-            s_strdata=bytes.fromhex(telem_header + hex_data + telem_tail)
-            try:
-                s.sendall(s_strdata)
-            except socket.error:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.connect((s_ipv4, s_port))
-                s.sendall(s_strdata)
-                connected = "yes"
-            _w1.scrlLogs.insert(END, dtime() + "DATA=" + str(s_data))
+
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", data, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
+
+            #cmd_data = ['python', aprs_cmd, 'YD0BCX-13', 'APZBME', data, 'WIDE1-1']
+            #subprocess.run(cmd_data)
+
+            _w1.scrlLogs.insert(END, dtime() + "DATA=" + data)
 
             # BITS
             time.sleep(3)
-            s_bits = telem_bits(bits)
-            hex_bits = ascii_to_hex(s_bits)
-            s_strbits=bytes.fromhex(telem_header + hex_bits + telem_tail)
-            try:
-                s.sendall(s_strbits)
-            except socket.error:
-                s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                s.connect((s_ipv4, s_port))
-                s.sendall(s_strbits)
-                connected = "yes"
-            _w1.scrlLogs.insert(END, dtime() + "BITS=" + str(s_bits))
+
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", bits, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
+
+            #cmd_bits = ['python', aprs_cmd, 'YD0BCX-13', 'APZBME', bits, 'WIDE1-1']
+            #subprocess.run(cmd_bits)
+
+            _w1.scrlLogs.insert(END, dtime() + "BITS=" + bits)
+
+            # STATUS
+            time.sleep(3)
+
+            status=">Uptime: " + uptime()
+            kiss_frame = encode_ui_frame("YD0BCX-13", "APZBME", status, *paths)
+
+            # Connect to Dire Wolf listening on port 8001 on this machine and send the frame
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((s_ipv4, s_port))
+            s.send(kiss_frame)
+            s.close()
 
         time.sleep(1)  # Sleep for 1 second to reduce CPU usage
 
@@ -212,6 +250,40 @@ def dtime():
     now = datetime.now()
     s1 = now.strftime("%m/%d/%Y, %H:%M:%S")
     return ("[" + str(s1) + "] ")
+
+def uptime():
+
+     try:
+         f = open( "/proc/uptime" )
+         contents = f.read().split()
+         f.close()
+     except:
+        return "Cannot open uptime file: /proc/uptime"
+
+     total_seconds = float(contents[0])
+
+     # Helper vars:
+     MINUTE  = 60
+     HOUR    = MINUTE * 60
+     DAY     = HOUR * 24
+
+     # Get the days, hours, etc:
+     days    = int( total_seconds / DAY )
+     hours   = int( ( total_seconds % DAY ) / HOUR )
+     minutes = int( ( total_seconds % HOUR ) / MINUTE )
+     seconds = int( total_seconds % MINUTE )
+
+     # Build up the pretty string (like this: "N days, N hours, N minutes, N seconds")
+     string = ""
+     if days > 0:
+         string += str(days) + " " + (days == 1 and "day" or "days" ) + ", "
+     if len(string) > 0 or hours > 0:
+         string += str(hours) + " " + (hours == 1 and "hour" or "hours" ) + ", "
+     if len(string) > 0 or minutes > 0:
+         string += str(minutes) + " " + (minutes == 1 and "minute" or "minutes" ) + ", "
+     string += str(seconds) + " " + (seconds == 1 and "second" or "seconds" )
+
+     return string;
 
 def get_sensor():
     while not stop_event.is_set():
@@ -410,6 +482,83 @@ def generate_aprs_weather_string(temperature, humidity, pressure):
 def celsius_to_fahrenheit(celsius):
     fahrenheit = round((celsius * 9/5) + 32, 2)
     return "{:0>{}}".format(round(fahrenheit), 3)
+
+def generate_aprs_timestamp():
+    # Get the current UTC time
+    utc_now = datetime.utcnow()
+
+    # Format the timestamp in APRS format (YYMMDDhhmmss)
+    aprs_timestamp = utc_now.strftime("%d%H%M")
+
+    return aprs_timestamp + "z"  # Use only the first 6 characters and append 'Z'
+    
+#Encode KISS Call SSID Destination 
+def encode_address(s, final):
+    try:
+        digi = False
+
+        if "-" not in s:
+            s = s + "-0"  # default to SSID 0
+        if "*" in s:
+            digi = True
+            s = s.replace('*', '')
+
+        call, ssid = s.split('-')
+        
+        if len(call) < 6:
+            call = call + " " * (6 - len(call))  # pad with spaces
+        
+        encoded_call = [ord(x) << 1 for x in call[0:6]]
+        encoded_ssid = (int(ssid) << 1) | 0b01100000 | (0b00000001 if final else 0)
+
+        # Include the 7th bit in the SSID byte based on the 'digi' flag
+        if digi:
+            encoded_ssid |= 0x80
+
+        return encoded_call + [encoded_ssid]
+    
+    except ValueError as e:
+        print("Error encoding address:", e)
+
+# Encode KISS Frame
+def encode_ui_frame(source, destination, message, *paths):
+
+    src_addr_final = not paths or (len(paths) == 1 and paths[0] == '')  # src_addr_final is True if no paths are provided
+    src_addr = encode_address(source.upper(), src_addr_final)
+    dest_addr = encode_address(destination.upper(), False)
+
+    # Ensure paths is a list of strings
+    if isinstance(paths, (tuple, list)) and len(paths) == 1 and isinstance(paths[0], str):
+        paths = paths[0].split(',')
+    elif not all(isinstance(path, str) for path in paths):
+        print("Invalid paths format. Returning None.")
+        return None
+
+    encoded_paths = [] if not paths or paths[0] == '' else [encode_address(path.upper(), final) for final, path in zip([False] * (len(paths) - 1) + [True], paths)]
+
+    c_byte = [0x03]
+    pid = [0xF0]
+    msg = [ord(c) for c in message]
+
+    packet = dest_addr + src_addr + sum(encoded_paths, []) + c_byte + pid + msg
+
+    packet_escaped = []
+    for x in packet:
+        if x == KISS_FEND:
+            packet_escaped.append(KISS_FESC)
+            packet_escaped.append(KISS_TFEND)
+        elif x == KISS_FESC:
+            packet_escaped.append(KISS_FESC)
+            packet_escaped.append(KISS_TFESC)
+        else:
+            packet_escaped.append(x)
+
+    kiss_cmd = 0x00
+    kiss_frame = [KISS_FEND, kiss_cmd] + packet_escaped + [KISS_FEND]
+
+    kiss_frame = bytes(kiss_frame)
+        
+    return kiss_frame
 
 if __name__ == '__main__':
     BME280.start_up()

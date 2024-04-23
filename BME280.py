@@ -265,6 +265,7 @@ class APRS_Telemetry:
         self.scrlLogs.configure(highlightcolor="#d9d9d9")
         self.scrlLogs.configure(selectbackground="#c4c4c4")
         self.scrlLogs.configure(selectforeground="black")
+        self.scrlLogs.configure(relief="solid")
 
 # The following code is added to facilitate the Scrolled widgets you specified.
 class AutoScroll(object):
